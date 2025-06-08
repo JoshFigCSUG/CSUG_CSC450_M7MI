@@ -1,0 +1,84 @@
+start
+
+    // Declarations
+    DECLARE INTEGER shared_counter = 0
+    DECLARE MUTEX counter_mutex
+    DECLARE CONDITION_VARIABLE cv
+    DECLARE BOOLEAN count_up_finished = FALSE
+
+    // Function for the "count up" thread
+    FUNCTION countUp()
+        FOR i FROM 0 TO 20
+            // Acquire lock
+            LOCK counter_mutex
+            // Set shared_counter to current iteration
+            SET shared_counter = i
+            // Print current count up value progress
+            DISPLAY "Count Up: ", shared_counter
+            // Release lock
+            UNLOCK counter_mutex
+            // Simulate work with timed pause
+            SLEEP FOR 100 MILLISECONDS
+        ENDFOR
+
+        // Acquire lock
+        LOCK counter_mutex
+        // Set flag to true indicating count up is complete
+        SET count_up_finished = TRUE
+        // Print thread counting up update message
+        DISPLAY "Count Up finished. Signalling Count Down thread."
+        // Release lock
+        UNLOCK counter_mutex
+        // Notify waiting "count down" thread
+        NOTIFY_ONE cv
+    ENDFUNCTION
+
+    // Function for the "count down" thread
+    FUNCTION countDown()
+        // Acquire unique lock
+        ACQUIRE_UNIQUE_LOCK counter_mutex
+
+        // Print "count down" thread waiting message
+        DISPLAY "Count Down thread waiting for Count Up to finish..."
+        // Wait on 'cv' until 'count_up_finished' is true
+        WAIT ON cv UNTIL count_up_finished IS TRUE
+
+        // Print starting count down value
+        DISPLAY "Count Down thread starting from ", shared_counter
+
+        // Release the unique lock
+        RELEASE_UNIQUE_LOCK counter_mutex
+
+        FOR i FROM shared_counter DOWN TO 0
+            // Acquire lock for each update
+            LOCK counter_mutex
+            // Set shared_counter to current iteration
+            SET shared_counter = i
+            // Print current count down value progress
+            DISPLAY "Count Down: ", shared_counter
+            // Release lock
+            UNLOCK counter_mutex
+            // Simulate work
+            SLEEP FOR 100 MILLISECONDS
+        ENDFOR
+        // Print thread counting down update message
+        DISPLAY "Count Down finished."
+    ENDFUNCTION
+
+    DISPLAY "Program started."
+
+    // Create two threads
+    CREATE THREAD up_thread CALLING countUp()
+    CREATE THREAD down_thread CALLING countDown()
+
+    // Wait for both threads to complete
+    JOIN up_thread
+    JOIN down_thread
+
+    // After both threads have finished, print update message with the final value
+    DISPLAY "Both threads finished. Final shared_counter: ", shared_counter
+    DISPLAY "Program finished."
+
+    RETURN 0
+
+stop
